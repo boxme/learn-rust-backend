@@ -22,6 +22,9 @@ actix-web = "4"
 serde = { version = "1.0.204",  features = ["derive"] }
 tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
 tokio-macros = { version = "2" }
+config = "0.14"
+uuid = { version = "1", features = ["v4"] }
+chrono = { version = "0.4.22", default-features = false, features = ["clock"] }
 
 # Using table-like toml syntax to avoid a super-long line!
 [dependencies.sqlx]
@@ -32,8 +35,8 @@ features = [
     "macros",
     "postgres",
     "uuid",
-"chrono",
-"migrate"
+    "chrono",
+    "migrate"
 ]
 
 # Dev dependencies are used exclusively when running tests or examples
