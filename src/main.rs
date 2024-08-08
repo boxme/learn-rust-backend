@@ -1,10 +1,17 @@
 use std::{io::Error, net::TcpListener};
 
 use sqlx::PgPool;
-use zero2prod::{configuration::get_configuration, startup::run};
+use zero2prod::{
+    configuration::get_configuration,
+    startup::run,
+    telemetry::{get_subscriber, init_subscriber},
+};
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    let subscriber = get_subscriber("zero2pod".into(), "info".into());
+    init_subscriber(subscriber);
+
     // Panic if we can't read configuration
     let configuration = get_configuration().expect("Failed to read configs");
     let connection_pool = PgPool::connect(&configuration.database.connection_string())
