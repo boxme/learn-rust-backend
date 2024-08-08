@@ -1,4 +1,7 @@
-use std::{io::Error, net::TcpListener};
+use std::{
+    io::{stdout, Error},
+    net::TcpListener,
+};
 
 use sqlx::PgPool;
 use zero2prod::{
@@ -9,7 +12,7 @@ use zero2prod::{
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    let subscriber = get_subscriber("zero2pod".into(), "info".into());
+    let subscriber = get_subscriber("zero2pod".into(), "info".into(), stdout);
     init_subscriber(subscriber);
 
     // Panic if we can't read configuration
