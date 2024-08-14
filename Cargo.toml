@@ -35,6 +35,7 @@ tracing-actix-web = "0.7"
 serde-aux = "4"
 unicode-segmentation = "1"
 claims = "0.7"
+validator = "0.16"
 
 # Using table-like toml syntax to avoid a super-long line!
 [dependencies.sqlx]
