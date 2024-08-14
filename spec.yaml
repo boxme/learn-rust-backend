@@ -9,7 +9,6 @@ services:
       branch: master
       # Deploy a new version on every commit to `master`!  
       deploy_on_push: true
-      # !!! Fill in with your details
       repo: boxme/learn-rust-backend
     # Active probe used by DigitalOcean's to ensure our application is healthy
     health_check:
