@@ -6,3 +6,11 @@ database:
   username: "postgres"
   password: "password"
   database_name: "newsletter"
+email_client:
+  base_url: "http://localhost"
+  sender_email: "desmond@raccoons.dev"
+  # New value!
+  # We are only setting the development value,
+  # we'll deal with the production token outside of version control
+  # (given that it's a sensitive secret!)
+  authorization_token: "my-secret-token"
