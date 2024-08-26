@@ -26,27 +26,67 @@ impl TryFrom<FormData> for NewSubscriber {
     }
 }
 
-#[derive(Debug)]
 pub enum SubscriberError {
     ValidationError(String),
-    DatabaseError(sqlx::Error),
     StoreTokenError(StoreTokenError),
     SendEmailError(reqwest::Error),
+    PoolError(sqlx::Error),
+    InsertSubscriberError(sqlx::Error),
+    TransactionCommitError(sqlx::Error),
+}
+
+impl std::fmt::Debug for SubscriberError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        error_chain_fmt(self, f)
+    }
 }
 
 impl std::fmt::Display for SubscriberError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "Failed to create a new subscriber.")
+        match self {
+            SubscriberError::ValidationError(e) => write!(f, "{}", e),
+            SubscriberError::StoreTokenError(_) => write!(
+                f,
+                "Failed to store the confirmation token for a new subscriber."
+            ),
+            SubscriberError::SendEmailError(_) => write!(f, "Failed to send a confirmation email."),
+            SubscriberError::PoolError(_) => {
+                write!(f, "Failed to acquire a Postgres connection from the pool")
+            }
+            SubscriberError::InsertSubscriberError(_) => {
+                write!(f, "Failed to insert new subscriber in the database.")
+            }
+            SubscriberError::TransactionCommitError(_) => {
+                write!(
+                    f,
+                    "Failed to commit SQL transaction to store a new subscriber."
+                )
+            }
+        }
     }
 }
 
-impl std::error::Error for SubscriberError {}
+impl std::error::Error for SubscriberError {
+    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+        match self {
+            // &str does not implement 'Error'. We'd consider it the root cause
+            SubscriberError::ValidationError(_) => None,
+            SubscriberError::StoreTokenError(e) => Some(e),
+            SubscriberError::SendEmailError(e) => Some(e),
+            SubscriberError::PoolError(e) => Some(e),
+            SubscriberError::InsertSubscriberError(e) => Some(e),
+            SubscriberError::TransactionCommitError(e) => Some(e),
+        }
+    }
+}
 
 impl ResponseError for SubscriberError {
     fn status_code(&self) -> reqwest::StatusCode {
         match self {
             SubscriberError::ValidationError(_) => StatusCode::BAD_REQUEST,
-            SubscriberError::DatabaseError(_)
+            SubscriberError::PoolError(_)
+            | SubscriberError::InsertSubscriberError(_)
+            | SubscriberError::TransactionCommitError(_)
             | SubscriberError::StoreTokenError(_)
             | SubscriberError::SendEmailError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
@@ -56,12 +96,6 @@ impl ResponseError for SubscriberError {
 impl From<reqwest::Error> for SubscriberError {
     fn from(value: reqwest::Error) -> Self {
         Self::SendEmailError(value)
-    }
-}
-
-impl From<sqlx::Error> for SubscriberError {
-    fn from(value: sqlx::Error) -> Self {
-        Self::DatabaseError(value)
     }
 }
 
@@ -119,13 +153,18 @@ pub async fn subscribe(
     // `web::Form` is a wrapper around `FormData`
     // `form.0` gives us access to the underlying `FormData`
     let new_subscriber = form.0.try_into()?;
-    let mut transaction = pool.begin().await?;
+    let mut transaction = pool.begin().await.map_err(SubscriberError::PoolError)?;
 
-    let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber).await?;
+    let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber)
+        .await
+        .map_err(SubscriberError::InsertSubscriberError)?;
     let subscription_token = generate_subscription_token();
     store_token(&mut transaction, subscriber_id, &subscription_token).await?;
 
-    transaction.commit().await?;
+    transaction
+        .commit()
+        .await
+        .map_err(SubscriberError::TransactionCommitError)?;
 
     send_confirmation_email(
         &email_client,
