@@ -1,4 +1,5 @@
 use actix_web::{web, HttpResponse, ResponseError};
+use anyhow::Context;
 use rand::{distributions::Alphanumeric, thread_rng, Rng};
 use reqwest::StatusCode;
 use sqlx::{types::chrono::Utc, Executor, PgPool, Postgres, Transaction};
@@ -30,16 +31,10 @@ impl TryFrom<FormData> for NewSubscriber {
 pub enum SubscriberError {
     #[error("{0}")]
     ValidationError(String),
-    #[error("Failed to store the confirmation token for a new subscriber.")]
-    StoreTokenError(#[from] StoreTokenError),
-    #[error("Failed to send a confirmation email.")]
-    SendEmailError(#[from] reqwest::Error),
-    #[error("Failed to acquire a Postgres connection from the pool")]
-    PoolError(#[source] sqlx::Error),
-    #[error("Failed to insert new subscriber in the database.")]
-    InsertSubscriberError(#[source] sqlx::Error),
-    #[error("Failed to commit SQL transaction to store a new subscriber.")]
-    TransactionCommitError(#[source] sqlx::Error),
+    // Transparent delegates both `Display`'s and `source`'s implementation
+    // to the type wrapped by `UnexpectedError`
+    #[error(transparent)]
+    UnexpectedError(#[from] anyhow::Error),
 }
 
 // Write custom implementation of Debug
@@ -53,11 +48,7 @@ impl ResponseError for SubscriberError {
     fn status_code(&self) -> reqwest::StatusCode {
         match self {
             SubscriberError::ValidationError(_) => StatusCode::BAD_REQUEST,
-            SubscriberError::PoolError(_)
-            | SubscriberError::InsertSubscriberError(_)
-            | SubscriberError::TransactionCommitError(_)
-            | SubscriberError::StoreTokenError(_)
-            | SubscriberError::SendEmailError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            SubscriberError::UnexpectedError(_) => StatusCode::INTERNAL_SERVER_ERROR,
         }
     }
 }
@@ -110,18 +101,24 @@ pub async fn subscribe(
     // `web::Form` is a wrapper around `FormData`
     // `form.0` gives us access to the underlying `FormData`
     let new_subscriber = form.0.try_into()?;
-    let mut transaction = pool.begin().await.map_err(SubscriberError::PoolError)?;
+    let mut transaction = pool
+        .begin()
+        .await
+        .context("Failed to acquire a Postgres connection from the pool")?;
 
     let subscriber_id = insert_subscriber(&mut transaction, &new_subscriber)
         .await
-        .map_err(SubscriberError::InsertSubscriberError)?;
+        .context("Failed to insert new subscriber in the database.")?;
+
     let subscription_token = generate_subscription_token();
-    store_token(&mut transaction, subscriber_id, &subscription_token).await?;
+    store_token(&mut transaction, subscriber_id, &subscription_token)
+        .await
+        .context("Failed to store the confirmation token for a new subscriber.")?;
 
     transaction
         .commit()
         .await
-        .map_err(SubscriberError::TransactionCommitError)?;
+        .context("Failed to commit SQL transaction to store a new subscriber.")?;
 
     send_confirmation_email(
         &email_client,
@@ -129,7 +126,8 @@ pub async fn subscribe(
         &base_url.0,
         &subscription_token,
     )
-    .await?;
+    .await
+    .context("Failed to send a confirmation email.")?;
 
     Ok(HttpResponse::Ok().finish())
 }
@@ -155,10 +153,9 @@ pub async fn insert_subscriber(
     );
 
     transaction.execute(query).await.map_err(|e| {
-        tracing::error!("Failed to execute query: {:?}", e);
         e
         // Using the `?` operator to return early
-        // if the function failed, returning a sqlx::Error // We will talk about error handling in depth later!
+        // if the function failed, returning a sqlx::Error
     })?;
 
     Ok(subscriber_id)
