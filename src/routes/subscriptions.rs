@@ -26,57 +26,26 @@ impl TryFrom<FormData> for NewSubscriber {
     }
 }
 
+#[derive(thiserror::Error)]
 pub enum SubscriberError {
+    #[error("{0}")]
     ValidationError(String),
-    StoreTokenError(StoreTokenError),
-    SendEmailError(reqwest::Error),
-    PoolError(sqlx::Error),
-    InsertSubscriberError(sqlx::Error),
-    TransactionCommitError(sqlx::Error),
+    #[error("Failed to store the confirmation token for a new subscriber.")]
+    StoreTokenError(#[from] StoreTokenError),
+    #[error("Failed to send a confirmation email.")]
+    SendEmailError(#[from] reqwest::Error),
+    #[error("Failed to acquire a Postgres connection from the pool")]
+    PoolError(#[source] sqlx::Error),
+    #[error("Failed to insert new subscriber in the database.")]
+    InsertSubscriberError(#[source] sqlx::Error),
+    #[error("Failed to commit SQL transaction to store a new subscriber.")]
+    TransactionCommitError(#[source] sqlx::Error),
 }
 
+// Write custom implementation of Debug
 impl std::fmt::Debug for SubscriberError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         error_chain_fmt(self, f)
-    }
-}
-
-impl std::fmt::Display for SubscriberError {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        match self {
-            SubscriberError::ValidationError(e) => write!(f, "{}", e),
-            SubscriberError::StoreTokenError(_) => write!(
-                f,
-                "Failed to store the confirmation token for a new subscriber."
-            ),
-            SubscriberError::SendEmailError(_) => write!(f, "Failed to send a confirmation email."),
-            SubscriberError::PoolError(_) => {
-                write!(f, "Failed to acquire a Postgres connection from the pool")
-            }
-            SubscriberError::InsertSubscriberError(_) => {
-                write!(f, "Failed to insert new subscriber in the database.")
-            }
-            SubscriberError::TransactionCommitError(_) => {
-                write!(
-                    f,
-                    "Failed to commit SQL transaction to store a new subscriber."
-                )
-            }
-        }
-    }
-}
-
-impl std::error::Error for SubscriberError {
-    fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
-        match self {
-            // &str does not implement 'Error'. We'd consider it the root cause
-            SubscriberError::ValidationError(_) => None,
-            SubscriberError::StoreTokenError(e) => Some(e),
-            SubscriberError::SendEmailError(e) => Some(e),
-            SubscriberError::PoolError(e) => Some(e),
-            SubscriberError::InsertSubscriberError(e) => Some(e),
-            SubscriberError::TransactionCommitError(e) => Some(e),
-        }
     }
 }
 
@@ -93,21 +62,9 @@ impl ResponseError for SubscriberError {
     }
 }
 
-impl From<reqwest::Error> for SubscriberError {
-    fn from(value: reqwest::Error) -> Self {
-        Self::SendEmailError(value)
-    }
-}
-
 impl From<String> for SubscriberError {
     fn from(value: String) -> Self {
         Self::ValidationError(value)
-    }
-}
-
-impl From<StoreTokenError> for SubscriberError {
-    fn from(value: StoreTokenError) -> Self {
-        Self::StoreTokenError(value)
     }
 }
 
@@ -284,3 +241,43 @@ fn error_chain_fmt(
 
     Ok(())
 }
+
+// No longer needed because we're using thiserror::Error
+// impl std::fmt::Display for SubscriberError {
+//     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+//         match self {
+//             SubscriberError::ValidationError(e) => write!(f, "{}", e),
+//             SubscriberError::StoreTokenError(_) => write!(
+//                 f,
+//                 "Failed to store the confirmation token for a new subscriber."
+//             ),
+//             SubscriberError::SendEmailError(_) => write!(f, "Failed to send a confirmation email."),
+//             SubscriberError::PoolError(_) => {
+//                 write!(f, "Failed to acquire a Postgres connection from the pool")
+//             }
+//             SubscriberError::InsertSubscriberError(_) => {
+//                 write!(f, "Failed to insert new subscriber in the database.")
+//             }
+//             SubscriberError::TransactionCommitError(_) => {
+//                 write!(
+//                     f,
+//                     "Failed to commit SQL transaction to store a new subscriber."
+//                 )
+//             }
+//         }
+//     }
+// }
+
+// impl std::error::Error for SubscriberError {
+//     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
+//         match self {
+//             // &str does not implement 'Error'. We'd consider it the root cause
+//             SubscriberError::ValidationError(_) => None,
+//             SubscriberError::StoreTokenError(e) => Some(e),
+//             SubscriberError::SendEmailError(e) => Some(e),
+//             SubscriberError::PoolError(e) => Some(e),
+//             SubscriberError::InsertSubscriberError(e) => Some(e),
+//             SubscriberError::TransactionCommitError(e) => Some(e),
+//         }
+//     }
+// }
