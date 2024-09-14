@@ -40,10 +40,11 @@ validator = "0.16"
 rand = { version = "0.8.5", features=["std_rng"] }
 thiserror = "1"
 anyhow = "1"
+base64 = "0.22"
 
 # Using table-like toml syntax to avoid a super-long line!
 [dependencies.sqlx]
-version = "0.8"
+version = "0.8.0"
 default-features = false
 features = [
     "runtime-tokio-rustls",
