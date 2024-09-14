@@ -40,9 +40,6 @@ validator = "0.16"
 rand = { version = "0.8.5", features=["std_rng"] }
 thiserror = "1"
 anyhow = "1"
-raydium-amm-v3 = { git = "ssh://git@github.com/jup-ag/raydium-clmm.git", rev = "a4ccabd997bb4b79583f3e8448ceb2d2f3759dc6", features = [
-    "no-entrypoint",
-] }
 
 # Using table-like toml syntax to avoid a super-long line!
 [dependencies.sqlx]
