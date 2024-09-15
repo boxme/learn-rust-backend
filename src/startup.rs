@@ -83,8 +83,8 @@ pub fn run(
     // Capture `connection` from the surrounding environment
     let server = HttpServer::new(move || {
         App::new()
-            // Middlewares are added using wrap method
-            .wrap(TracingLogger::default())
+            // Middlewares are added using wrap method. Turn off TracingLogging::default() because it's affecting errors return for tests
+            // .wrap(TracingLogger::default())
             .route("/health_check", web::get().to(routes::health_check))
             .route("/subscriptions", web::post().to(routes::subscribe))
             .route("/subscriptions/confirm", web::get().to(routes::confirm))
